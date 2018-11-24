@@ -23,6 +23,7 @@ void CAppCompress::CustomFinal(void) {
 	// Add custom finalization code here
 }
 
+
 int predictEval(unsigned char *buf, int x, int y, int width, int height, int &diffValue) {
 
 	int predT ;
@@ -137,11 +138,32 @@ unsigned char *CAppCompress::Compress(int &cDataSize) {
 	// You can modify anything within this function, but you cannot change the function prototype.
 	unsigned char *compressedData ;
 
+	TRACE("width: %d, height: %d\r\n", width, height);
 	cDataSize = width * height * 3 ;				// You need to determine the size of the compressed data. 
 													// Here, we simply set it to the size of the original image
+
 	compressedData = new unsigned char[cDataSize] ; // As an example, we just copy the original data as compressedData.
 
 	memcpy(compressedData, pInput, cDataSize) ;
+
+	TRACE("cDataSize: %d\r\n", cDataSize);
+
+	
+	char dict[256*32];
+	for (int i = 0; i < 256*32; i++) {
+			dict[i] = '\0';
+	}
+	int* lens = new int[256];
+	int max_len = DictBuild(pInput, cDataSize, dict, lens);
+
+	char temp[32];
+	memcpy(temp, dict, 32);
+	for (int i = 0; i < 32 * 8; i++) {
+		TRACE("####%c\r\n", ((temp[i / 8] >> (i % 8)) & ('1' - '0')) + '0');
+	}
+	TRACE("****%d\r\n", lens[0]);
+
+	TRACE("max_len: %d\r\n", max_len);
 
 	return compressedData ;		// return the compressed data
 }
@@ -186,4 +208,158 @@ void CAppCompress::Process(void) {
 	printf(_T("Original Size = %d, Compressed Size = %d, Compression Ratio = %2.2f\r\n"), width * height * 3, cDataSize, (double) width * height * 3 / cDataSize) ;
 
 	PutDC(pOutput) ;
+}
+
+
+void CAppCompress::InsertNode(treeNode** node, treeNode* newNode) {
+	for (int i = 2; i < 256; i++) {
+		if (newNode->value < node[i]->value || node[i]->value==0) {
+			for (int j = 2; j < i; j++) {
+				node[j - 2] = node[j];
+			}
+			node[i - 2] = newNode;
+			for (int j = i - 1; j < 256; j++) {
+				node[j] = node[j + 1];
+			}
+		}
+	}
+}
+
+void select(treeNode** node, int* i1, int* i2, int n) {
+	for (int i = 0; i < n; i++) {
+		if (node[i]->parent == NULL) {
+			if (*i1 == 0) {
+				*i1 = i;
+			}
+			else if (*i2 == 0) {
+				*i2 = i;
+			}
+			else {
+				break;
+			}
+		}
+	}
+
+	if (node[*i1]->value > node[*i2]->value) {
+		int temp = *i1;
+		*i1 = *i2;
+		*i2 = temp;
+	}
+
+	for (int i = 0; i < n; i++) {
+		if (node[i]->parent == NULL) {
+
+			if (node[i]->value < node[*i2]->value && i != *i1) {
+				if (node[i]->value < node[*i1]->value) {
+					*i2 = *i1; *i1 = i;
+				}
+				else {
+					*i2 = i;
+				}
+			}
+		}
+	}
+}
+
+void CAppCompress::buildHuffmanTree(treeNode** node, int n) {
+	int i1 = 0;
+	int i2 = 0;
+		
+	select(node, &i1, &i2, n);
+
+	node[i1]->parent = node[n];
+	node[i2]->parent = node[n];
+	node[n]->leftChild = node[i1];
+	node[n]->rightChild = node[i2];
+	node[n]->value = node[i1]->value + node[i2]->value;
+
+	//TRACE("node[%d]: %d + node[%d]: %d = node[%d]: %d\r\n", i1, node[i1]->value, i2, node[i2]->value, n, node[n]->value);
+
+}
+
+int CAppCompress::DictBuild(unsigned char* pInput, int cDataSize, char *dict, int* lens){
+
+	int colorValueShown[257];	// the times of every color shown
+	treeNode* node[512];
+
+	//init all values
+	for (int i = 0; i < 257; i++) {
+		colorValueShown[i] = 0;
+		lens[i] = 0;
+	}
+
+	for (int i = 0; i < 512; i++) {
+		treeNode* tempNode = new treeNode;
+		tempNode->value = 0;
+		tempNode->parent = NULL;
+		tempNode->leftChild = NULL;
+		tempNode->rightChild = NULL;
+		node[i] = tempNode;
+	}
+
+	//calculate the times of every color shown
+	for (int i = 0; i < cDataSize; i++) {
+		unsigned char colorValue = pInput[i];
+		int iColorValue = (unsigned int)colorValue;
+		if (iColorValue < 0 || iColorValue >= 256) {
+		}
+		colorValueShown[iColorValue]++;
+	}
+
+	
+	//build all leaf nodes
+	int leafNum = 0;
+	for (int i = 0; i < 256; i++) {
+		if (colorValueShown[i] != 0) {
+			node[leafNum]->key = i;
+			node[leafNum]->value = colorValueShown[i];
+			node[leafNum]->parent = NULL;
+			node[leafNum]->leftChild = NULL;
+			node[leafNum]->rightChild = NULL;
+			leafNum++;
+		}
+	}
+
+	//build the huffman tree
+	for (int i = leafNum; i < 2*leafNum-1; i++) {
+		buildHuffmanTree(node, i);
+	}
+
+	int max_len = 0;
+	for (int i = 0; i < leafNum; i++) {
+		int numParent = 0;
+		//int code = 0;
+		unsigned char code[32];
+		for (int i = 0; i < 32; i++) {
+			code[i] = '\0';
+		}
+		treeNode* parentNode = node[i]->parent;
+		treeNode* childNode = node[i];
+		while (childNode->parent != NULL) {
+			if (childNode == parentNode->leftChild) {
+				//code += pow(2, numParent);
+				unsigned char temp = code[31 - numParent / 8] | (('1' - '0') << (numParent % 8));
+				code[31 - numParent / 8] = temp;
+			}
+			numParent++;
+			childNode = childNode->parent;
+			parentNode = childNode->parent;
+			
+		}
+
+		//dict[node[i]->key] = code;
+		memcpy(dict+ node[i]->key*32, code, 32);
+		lens[node[i]->key] = numParent;
+
+		//TRACE("node[%d]: %d, code: %s, lens: %d\r\n", i, node[i]->value, code, numParent);
+		if (numParent > max_len) {
+			max_len = numParent;
+		}
+	}
+
+
+
+
+	return max_len;
+
 }
