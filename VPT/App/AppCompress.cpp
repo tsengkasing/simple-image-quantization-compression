@@ -156,7 +156,7 @@ unsigned char *CAppCompress::Compress(int &cDataSize) {
 	/* Build Huffman Tree */
 	unsigned int encoding_max_len = DictBuild(pInput, cDataSize, huffmanTree, encoding_len);
 	encoding_max_len = calcComplementLength(encoding_max_len);
-	int byte_encoding_max = encoding_max_len / 8;
+	unsigned int byte_encoding_max = encoding_max_len / 8;
 
 	/**
 	 * Package the Huffman Table into @var{compressedData}
@@ -236,7 +236,7 @@ unsigned char *CAppCompress::Compress(int &cDataSize) {
 	int seat_pending = -1;
 
 	// Write to @var{CompressedData} from @var{encodedSequence}
-	while (pos_buf < 8 || pos_seq < (cDataSize * byte_encoding_max)) {
+	while (pos_buf < 8 || pos_seq < (cDataSize * byte_encoding_max) || seat_pending > -1) {
 		// Set Buffer position to 0
 		pos_buf = 0;
 		// Make Buffer Empty
@@ -303,6 +303,7 @@ void CAppCompress::Decompress(unsigned char *compressedData, int cDataSize, unsi
 	int pos_data = -1;
 	// Huffman Tree Table Size
 	int treeSize = compressedData[++pos_data] & 0xFF;
+	if (treeSize == 0) treeSize = 256;
 	// Maximun Length of Encoding
 	int byte_encoding_max = compressedData[++pos_data] & 0xFF;
 
@@ -337,7 +338,6 @@ void CAppCompress::Decompress(unsigned char *compressedData, int cDataSize, unsi
 				if (node->leftChild != nullptr) {
 					node = node->leftChild;
 				} else {
-					++pos_buf;
 					break;
 				}
 			}
@@ -345,13 +345,11 @@ void CAppCompress::Decompress(unsigned char *compressedData, int cDataSize, unsi
 				if (node->rightChild != nullptr) {
 					node = node->rightChild;
 				} else {
-					++pos_buf;
 					break;
 				}
 			}
 			++pos_buf;
 		}
-		//TRACE("%d, %d %d\n", pos_data, cDataSize, pos_uncompressed_data);
 		// Write to uncompressedData
 		uncompressedData[pos_uncompressed_data++] = node->key & 0xFF;
 	}
@@ -558,7 +556,7 @@ treeNode* treeBuild(unsigned char* dict, int* lens) {
 		if (lens[i] != 0) {
 			int len = lens[i];
 			for (int j = 32 * 8 - len; j < 32 * 8; j++) {
-				if ((dict[32 * i + j / 8] >> (7 - j % 8)) & ('1' - '0') == ('1' - '0')) {
+				if (((dict[32 * i + j / 8] >> (7 - j % 8)) & (0b1)) == (0b1)) {
 					if (currentNode->leftChild == NULL) {
 						currentNode->leftChild = nodes[currentNum + 1];
 						currentNum = currentNum + 1;
@@ -601,7 +599,6 @@ void writeData(unsigned char* &target, int& size, int pos, unsigned char data) {
 		delete[] target;
 		size = adjustedSize;
 		target = base;
-		TRACE("[MEMORY]: %d MB\n", (int)(adjustedSize / 1024 / 1024));
 	}
 	target[pos] = data;
 }
