@@ -592,9 +592,8 @@ int calcComplementLength(int len) {
 /* Automatically adjust size of unsigned char* */
 void writeData(unsigned char* &target, int& size, int pos, unsigned char data) {
 	if (pos + 1 > size) {
-		unsigned char* base = target;
 		int adjustedSize = int(size * 1.1);
-		base = new unsigned char[adjustedSize];
+		unsigned char* base = new unsigned char[adjustedSize];
 		memcpy(base, target, size);
 		delete[] target;
 		size = adjustedSize;

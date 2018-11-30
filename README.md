@@ -18,22 +18,12 @@ Programming Assignment for **COMP7503 Multimedia Technologies**.
 
 
 
-### Quantization
+### 565 Quantization & Dequantization
 
 
 
 
-### Dequantization
-
-
-
-
-### Compression
-
-
-
-
-### Decompression
+### Huffman Compression & Decompression
 
 
 
