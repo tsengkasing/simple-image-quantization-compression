@@ -134,6 +134,15 @@ unsigned char predDiff(unsigned char *buf, int x, int y, int width, int height, 
 // The input reference variable cDataSize, is also serve as an output variable to indicate the size (in bytes) of the compressed data.
 unsigned char *CAppCompress::Compress(int &cDataSize) {
 	cDataSize = width * height * 3;
+
+	unsigned char* input = new unsigned char[cDataSize];
+	memcpy(input, pInput, sizeof(unsigned char) * cDataSize);
+	for (int i = cDataSize - 1; i >= 5; i = i - 3) {
+		pInput[i] = (unsigned char)((unsigned int)pInput[i] - (unsigned int)pInput[i - 3]);
+		pInput[i - 1] = (unsigned char)((unsigned int)pInput[i - 1] - (unsigned int)pInput[i - 4]);
+		pInput[i - 2] = (unsigned char)((unsigned int)pInput[i - 2] - (unsigned int)pInput[i - 5]);
+	}
+
 	// Create Variable @var{compressedData}
 	int size_compressed_data = 1024;
 	unsigned char *compressedData = new unsigned char[size_compressed_data];
@@ -291,6 +300,8 @@ unsigned char *CAppCompress::Compress(int &cDataSize) {
 	delete[] encodedLength;
 	//delete[] encoding_len;
 
+	memcpy(pInput, input, sizeof(unsigned char) * width * height * 3);
+
 	return compressedData;		// return the compressed data
 }
 
@@ -352,6 +363,12 @@ void CAppCompress::Decompress(unsigned char *compressedData, int cDataSize, unsi
 		}
 		// Write to uncompressedData
 		uncompressedData[pos_uncompressed_data++] = node->key & 0xFF;
+	}
+
+	for (unsigned int i = 5; i < pos_uncompressed_data; i = i + 3) {
+		uncompressedData[i] = (unsigned char)((unsigned int)uncompressedData[i] + (unsigned int)uncompressedData[i - 3]);
+		uncompressedData[i - 1] = (unsigned char)((unsigned int)uncompressedData[i - 1] + (unsigned int)uncompressedData[i - 4]);
+		uncompressedData[i - 2] = (unsigned char)((unsigned int)uncompressedData[i - 2] + (unsigned int)uncompressedData[i - 5]);
 	}
 
 	// Free Memory
