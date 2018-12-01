@@ -580,13 +580,15 @@ Finally, we finished decompressing the image.
 
 ## Explaination
 
-According to the result above, we can see that there is an improvement of the **Compression Ratio** in images *Beach*, *Red Panda*, *sunset*, *Tuxinu*.
+According to the result above, we can see that there is an improvement of the **Compression Ratio** in images *Beach*, *Red Panda*, *sunset* and *Tuxinu*.
 
 The reason why the **Compression Ratio** improves is that we did a **5-5-5 quantization** on the image. This is compressing the color space because it will map similar color to same color. This will reduce the number of  distinct numerical value of three-primary colors of RGB and increase the appearance frequency of certain kinds of three-primary colors of RGB.
 
 Since we use **Huffman Coding** algorithm to compress image, the encoded length is depending on the appearance frequency of the three-primary colors of RGB of all pixels, as well as the number of distinct numerical value of three-primary colors of RGB.
 
-After **5-5-5 quantization**, the number of distinct numerical value of three-primary colors of RGB reduced, while the appearance frequency of certain kinds of three-primary colors of RGB increased. This will obviously improve the **Compression Ratio**.
+After **5-5-5 quantization**, the number of distinct numerical value of three-primary colors of RGB reduced, while the appearance frequency of certain kinds of three-primary colors of RGB increased. 
+
+As we can see in the *Huffman tree* structure, the average length of code mainly depend on the number of different value. Before **quantization**, for most pictures, like given images *Beach*, *Red Panda* and *sunset*, the number of distinct numerical value of three-primary colors of RGB is 2^8^=`256`. But After **5-5-5 quantization**, the number of distinct numerical value of three-primary colors of RGB is 2^5^=`32`. Using *Huffman Code*, the worst case is that,  the length of all code is `5`, which would still increase the compression ratio up to about `1.6` . This will obviously improve the **Compression Ratio**.
 
 Thus, we can explain that the **Compression Ratio** of the last image (*Hydrogen.png*) won't improve because the image has too few colors since **5-5-5 quantization** neither reduced colors nor increase the appearance frequency of colors.
 
