@@ -392,20 +392,6 @@ void CAppCompress::Process(void) {
 	PutDC(pOutput) ;
 }
 
-void InsertNode(treeNode** node, treeNode* newNode) {
-	for (int i = 2; i < 256; i++) {
-		if (newNode->value < node[i]->value || node[i]->value == 0) {
-			for (int j = 2; j < i; j++) {
-				node[j - 2] = node[j];
-			}
-			node[i - 2] = newNode;
-			for (int j = i - 1; j < 256; j++) {
-				node[j] = node[j + 1];
-			}
-		}
-	}
-}
-
 void select(treeNode** node, int* i1, int* i2, int n) {
 	for (int i = 0; i < n; i++) {
 		if (node[i]->parent == NULL) {
@@ -475,12 +461,10 @@ int DictBuild(unsigned char* pInput, int cDataSize, unsigned char* dict, int* le
 		node[i] = tempNode;
 	}
 
-	//calculate the times of every color shown
+	//calculate the number of each color appeared
 	for (int i = 0; i < cDataSize; i++) {
 		unsigned char colorValue = pInput[i];
 		int iColorValue = (unsigned int)colorValue;
-		if (iColorValue < 0 || iColorValue >= 256) {
-		}
 		colorValueShown[iColorValue]++;
 	}
 
@@ -508,15 +492,15 @@ int DictBuild(unsigned char* pInput, int cDataSize, unsigned char* dict, int* le
 		int numParent = 0;
 		//int code = 0;
 		unsigned char code[32];
-		for (int i = 0; i < 32; i++) {
-			code[i] = '\0';
+		for (int j = 0; j < 32;j++) {
+			code[j] = '\0';
 		}
 		treeNode* parentNode = node[i]->parent;
 		treeNode* childNode = node[i];
 		while (childNode->parent != NULL) {
 			if (childNode == parentNode->leftChild) {
 				//code += pow(2, numParent);
-				unsigned char temp = code[31 - numParent / 8] | (('1' - '0') << (numParent % 8));
+				unsigned char temp = code[31 - numParent / 8] | (0x1 << (numParent % 8));
 				code[31 - numParent / 8] = temp;
 			}
 			numParent++;

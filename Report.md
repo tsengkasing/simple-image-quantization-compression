@@ -12,13 +12,32 @@ Group Members: Hanke Wang, Jiaxing Zeng
 
 # Quantize565 & Dequantize565
 
+## Brief Introduction
+
+In quantize565 and dequantize565 part, we learn the the idea in the given example quantize555 and dequantize555. We find that we only need to change the shifting bit to complete this function.
+
 ## Quantize565
 
+The differences between Quantize565 and Quantize555 are only the shift digits of green color and the storage.  
 
+Red color is stored in the first 5 bits in rgb16, so it is right shifted 11 bits.
+
+Green color is given 6 bits to store, so it just need to left shift 2 bits.
+
+```c
+rgb16 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+```
 
 ## Dequantize565
 
+In Dequantize565, we do the inverse process of Quantize565. 
 
+```CQL
+r = (rgb16 >> 11) & 0x1F;
+g = (rgb16 >> 5) & 0x3F;
+
+unquantizedImageData[(i + j * width) * 3 + 1] = (g << 2); //For green color
+```
 
 
 
@@ -119,9 +138,110 @@ The *Huffman Code* of 32 is "01" while 48 is "001". The value of them are equal 
 
 ### 2. Huffman Tree Building
 
-TODO: Introduce how to build the Huffman Tree.
+After initialization, we use input picture data to build a *Huffman tree* to get *Huffman code* for each number appeared. 
 
+#### Define *Huffman tree* node and data preparation
 
+First of all, we define the node for Huffman tree:
+
+```c++
+struct treeNode {
+	int key;
+	int value;
+	treeNode* parent;
+	treeNode* leftChild;
+	treeNode* rightChild;
+};
+```
+
+In this struct, **key** means the color, for each red,  green or blue color, the number for key is always 0~255. **Value** stores the number of each color appeared. **Parent**, **leftChild** and **rightChild** store the parent node, left child node and right child node respectively. 
+
+We create **512** tree node to store all nodes in *Huffman tree*, including leaf nodes, branch nodes and root node.  Actually, 511 is the max number of nodes needed for this *Huffman tree*.
+
+After that, we initialization all tree node and another array named `colorValueShown[256]` to store the number of each color appeared.  
+
+We scan the input picture, calculate the number of each color appeared.
+
+```c
+for (int i = 0; i < cDataSize; i++) {
+	unsigned char colorValue = pInput[i];
+	int iColorValue = (unsigned int)colorValue;
+    colorValueShown[iColorValue]++;
+}
+```
+
+#### Build *Huffman tree*
+
+Now that we have all numbers of color appeared,  we can build the *Huffman tree* for this particular picture.
+
+Building a tree is an **loop process**. In each loop, we find the **two nodes** which are not used and whose values are **smallest**. We set a new node as their parent node. The value of the new node is the **sum** of those two nodes, and its children nodes are those two nodes.
+
+```c
+//leafNum: the numbew of color value, max is 256;
+//if the number of leafNum is x, the number of branch node and root node are x-1;
+//so we just need x-1 loop.
+for (int i = leafNum; i < 2 * leafNum - 1; i++) {
+	buildHuffmanTree(node, i);
+}
+```
+
+```c
+void buildHuffmanTree(treeNode** node, int n) {
+	int i1 = 0; int i2 = 0;
+
+    //find the smallest two node and store the node subscript in i1 and i2.
+	select(node, &i1, &i2, n); 
+
+	node[i1]->parent = node[n];
+	node[i2]->parent = node[n];
+	node[n]->leftChild = node[i1];
+	node[n]->rightChild = node[i2];
+	node[n]->value = node[i1]->value + node[i2]->value;
+}
+```
+
+#### Code each color in *Huffman code*
+
+After building the *huffman tree*, we can code for each color value in the picture.
+
+There are two important values: 
+
+> code for each color, e.g. 124 &rArr; 0010110
+>
+> code length for each color, e.g. 124 &rArr; 7
+
+We use a ``unsigned char[32]`` to store the code in case of the worst case, and a int to store the length.
+
+For each color, we code it from the **leaf nodes**. In each step, we make these judgements . 
+
+> If the node does not have parent node, that means it's the root node, and we stop coding.
+>
+> If the node still have parent node,
+>
+> > if this node is its parend node's left child, we add a bit **1**,
+> >
+> > else, we add a bit **0**.
+
+```c
+//For a particular color i:
+treeNode* parentNode = node[i]->parent;
+treeNode* childNode = node[i];
+while (childNode->parent != NULL) {
+	if (childNode == parentNode->leftChild) {
+        //numParent: how many parents do the node have until this loop, we code the bit.
+        //Set the bit to 1 
+		unsigned char temp = code[31 - numParent / 8] | (0x1 << (numParent % 8));
+		code[31 - numParent / 8] = temp;
+    }
+	numParent++; 
+	childNode = childNode->parent;
+	parentNode = childNode->parent;
+}
+```
+
+Here we get the code of a particular color i, and the length is acutally how many parents do the node have, that is the variate `numParent`.
+
+We put the `color value`, `code` and `length` into two arrays, and pass it to the next step to encode.
 
 
 
@@ -305,6 +425,56 @@ for (int i = 0; i < treeSize && pos_data < cDataSize; ++i) {
 
 ### 2. Rebuild Huffman Tree
 
+After knowing the *Huffman Tree Mapping Table* and *length array*, we rebuild *Huffman tree* for further decompress.
+
+For each color, we build the tree from the root node.
+
+> for every bit in the code of a particular color, 
+>
+> if the bit is 1, we move to the current node's left child;
+>
+> > if the node does not have left child, we build a new left child;
+>
+> if the bit is 0, we move to the current node's right child;
+>
+> > if the node does not have right child, we build a new right child;
+
+```c
+treeNode* currentNode = rootNode;
+//for each color value
+for (int i = 0; i < 256; i++) {
+    //get the code length of this color
+	if (lens[i] != 0) {
+		int len = lens[i];
+        //loop for every bit in the code of the color, find a way to go to leaf node. 
+		for (int j = 32 * 8 - len; j < 32 * 8; j++) {
+			if (((dict[32 * i + j / 8] >> (7 - j % 8)) & (0b1)) == (0b1)) {
+				if (currentNode->leftChild == NULL) {
+                    //create a new node for left child
+					currentNode->leftChild = nodes[currentNum + 1];
+					currentNum = currentNum + 1;
+				}
+				currentNode = currentNode->leftChild;
+			}
+			else {
+				if (currentNode->rightChild == NULL) {
+                    //create a new node fot right chlid
+					currentNode->rightChild = nodes[currentNum + 1];
+					currentNum = currentNum + 1;
+				}
+				currentNode = currentNode->rightChild;
+			}
+		}
+        //the key of this leaf node is the color value.
+		currentNode->key = i;
+        //for nexr loop, set the current node return to the root node.
+		currentNode = rootNode;
+	}
+}
+```
+
+Finally, we get the root node and the whole rebuilt *Huffman tree*. 
+
 
 
 ### 3. Scan encoded string and recover pixels
@@ -410,7 +580,7 @@ Finally, we finished decompressing the image.
 
 ## Explaination
 
-According to the result above, we can see there is an improvement of the **Compression Ratio** in images *Beach*, *Red Panda*, *sunset*, *Tuxinu*.
+According to the result above, we can see that there is an improvement of the **Compression Ratio** in images *Beach*, *Red Panda*, *sunset*, *Tuxinu*.
 
 The reason why the **Compression Ratio** improves is that we did a **5-5-5 quantization** on the image. This is compressing the color space because it will map similar color to same color. This will reduce the number of  distinct numerical value of three-primary colors of RGB and increase the appearance frequency of certain kinds of three-primary colors of RGB.
 

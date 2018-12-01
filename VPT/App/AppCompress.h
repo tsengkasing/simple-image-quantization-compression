@@ -32,7 +32,6 @@ struct treeNode {
 	treeNode* rightChild;
 };
 
-void InsertNode(treeNode**, treeNode*);
 void select(treeNode**, int*, int*, int);
 void buildHuffmanTree(treeNode**, int);
 int DictBuild(unsigned char*, int, unsigned char*, int*);
