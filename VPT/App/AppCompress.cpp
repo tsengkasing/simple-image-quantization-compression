@@ -135,8 +135,11 @@ unsigned char predDiff(unsigned char *buf, int x, int y, int width, int height, 
 unsigned char *CAppCompress::Compress(int &cDataSize) {
 	cDataSize = width * height * 3;
 
+	// Copy an Input image
 	unsigned char* input = new unsigned char[cDataSize];
 	memcpy(input, pInput, sizeof(unsigned char) * cDataSize);
+
+	// Do Differential Coding
 	for (int i = cDataSize - 1; i >= 5; i = i - 3) {
 		pInput[i] = (unsigned char)((unsigned int)pInput[i] - (unsigned int)pInput[i - 3]);
 		pInput[i - 1] = (unsigned char)((unsigned int)pInput[i - 1] - (unsigned int)pInput[i - 4]);
@@ -298,8 +301,8 @@ unsigned char *CAppCompress::Compress(int &cDataSize) {
 	// Free Memory Space
 	delete[] encodedSequence;
 	delete[] encodedLength;
-	//delete[] encoding_len;
 
+	// Recover Input image
 	memcpy(pInput, input, sizeof(unsigned char) * width * height * 3);
 
 	return compressedData;		// return the compressed data
@@ -365,6 +368,7 @@ void CAppCompress::Decompress(unsigned char *compressedData, int cDataSize, unsi
 		uncompressedData[pos_uncompressed_data++] = node->key & 0xFF;
 	}
 
+	// Recover Differential Coding
 	for (unsigned int i = 5; i < pos_uncompressed_data; i = i + 3) {
 		uncompressedData[i] = (unsigned char)((unsigned int)uncompressedData[i] + (unsigned int)uncompressedData[i - 3]);
 		uncompressedData[i - 1] = (unsigned char)((unsigned int)uncompressedData[i - 1] + (unsigned int)uncompressedData[i - 4]);

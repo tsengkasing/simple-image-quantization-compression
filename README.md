@@ -48,29 +48,49 @@ unquantizedImageData[(i + j * width) * 3 + 1] = (g << 2); //For green color
 
 ## Brief Introduction
 
-In the compression & decompression part, we use **Huffman Coding** as our compression algorithm.
+In the compression & decompression part, we use **Differential Coding** and **Huffman Coding** as our compression algorithm.
 
-- There are 4 steps to compress the image:
+- There are 5 steps to compress the image:
 
-    1. A *Huffman Tree* will be built according to the **appearance frequency** of pixels bits.
-
-    2. The *Huffman Tree* will be converted to a **Huffman Coding Mapping Table**.
-
-    3. All the pixels of the input image will be encoded on the basis of the **mapping table**.
-    4. The mapping table and the encoded string will be written to variable **compressedData**.
+    1. Do a **Differential Coding** to the input image on all pixels.
+    2. A *Huffman Tree* will be built according to the **appearance frequency** of pixels bits.
+    3. The *Huffman Tree* will be converted to a **Huffman Coding Mapping Table**.
+    4. All the pixels of the input image will be encoded on the basis of the **mapping table**.
+    5. The mapping table and the encoded string will be written to variable **compressedData**.
 - There are 4 steps to decompress the image:
     1. Recover the **Huffman Coding Mapping Table** from the encoded string (variable **compressedData**).
     2. Rebuild the *Huffman Tree* from the **mapping table**.
-    3. Scan the encoded string bit by bit to recover the pixels according the *Huffman Tree*.
-    4. Recovered pixels will be written to variable **uncompressedData** .
+    3. Scan the encoded string bit by bit to recover the pixels according the *Huffman Tree* and write to variable **uncompressedData**.
+    4. Recover the **Differential Coding** from the variable **uncompressedData**.
 
 
 
 ## Compress
 
-### 1. Variable Initialization
+### 1. Differential Coding
 
-In the beginning, we create a new ``unsigned char[]`` with size 1024. Because we won't know the compressed size until we encoded everything, so we simply create a suitable size and then enlarge it when we need.
+In the beginning, we will do a **Differential Coding** on the input image pixels. Simply, we will do a subtraction between the 'R' of the first pixel and the 'R' of the second pixel. Then we will store the difference in the second pixel. Likewise, the 'G' and 'B' primary color can do the same operation. After that, we will repeat the same operation on the remaining pixels.
+
+```cpp
+// Do Differential Coding
+for (int i = cDataSize - 1; i >= 5; i = i - 3) {
+    pInput[i] = (unsigned char)(
+        (unsigned int)pInput[i] - (unsigned int)pInput[i - 3]
+    );
+    pInput[i - 1] = (unsigned char)(
+        (unsigned int)pInput[i - 1] - (unsigned int)pInput[i - 4]
+    );
+    pInput[i - 2] = (unsigned char)(
+        (unsigned int)pInput[i - 2] - (unsigned int)pInput[i - 5]
+    );
+}
+```
+
+
+
+### 2. Variable Initialization
+
+We create a new ``unsigned char[]`` with size 1024. Because we won't know the compressed size until we encoded everything, so we simply create a suitable size and then enlarge it when we need.
 
 ```cpp
 // Initialize variable compressedData
@@ -139,7 +159,7 @@ The *Huffman Code* of 32 is "01" while 48 is "001". The value of them are equal 
 
 
 
-### 2. Huffman Tree Building
+### 3. Huffman Tree Building
 
 After initialization, we use input picture data to build a *Huffman tree* to get *Huffman code* for each number appeared. 
 
@@ -190,16 +210,16 @@ for (int i = leafNum; i < 2 * leafNum - 1; i++) {
 
 ```c
 void buildHuffmanTree(treeNode** node, int n) {
-	int i1 = 0; int i2 = 0;
-
+    int i1 = 0; int i2 = 0;
+    
     //find the smallest two node and store the node subscript in i1 and i2.
-	select(node, &i1, &i2, n); 
-
-	node[i1]->parent = node[n];
-	node[i2]->parent = node[n];
-	node[n]->leftChild = node[i1];
-	node[n]->rightChild = node[i2];
-	node[n]->value = node[i1]->value + node[i2]->value;
+    select(node, &i1, &i2, n); 
+    
+    node[i1]->parent = node[n];
+    node[i2]->parent = node[n];
+    node[n]->leftChild = node[i1];
+    node[n]->rightChild = node[i2];
+    node[n]->value = node[i1]->value + node[i2]->value;
 }
 ```
 
@@ -230,15 +250,15 @@ For each color, we code it from the **leaf nodes**. In each step, we make these 
 treeNode* parentNode = node[i]->parent;
 treeNode* childNode = node[i];
 while (childNode->parent != NULL) {
-	if (childNode == parentNode->leftChild) {
+    if (childNode == parentNode->leftChild) {
         //numParent: how many parents do the node have until this loop, we code the bit.
         //Set the bit to 1 
-		unsigned char temp = code[31 - numParent / 8] | (0x1 << (numParent % 8));
-		code[31 - numParent / 8] = temp;
+        unsigned char temp = code[31 - numParent / 8] | (0x1 << (numParent % 8));
+        code[31 - numParent / 8] = temp;
     }
-	numParent++; 
-	childNode = childNode->parent;
-	parentNode = childNode->parent;
+    numParent++;
+    childNode = childNode->parent;
+    parentNode = childNode->parent;
 }
 ```
 
@@ -248,7 +268,7 @@ We put the `color value`, `code` and `length` into two arrays, and pass it to th
 
 
 
-### 3. Encoding Pixel
+### 4. Encoding Pixel
 
 After Building the *Huffman Tree* and converting it to the *Mapping Table*, we can know the **maximum length** of all *Huffman Code*.
 
@@ -263,11 +283,11 @@ Thus, we can no longer use ``unsigned char[32]`` to store a *Huffman Code*. We w
  *      17 -> 32
  */
 int calcComplementLength(int len) {
-	int n = 0;
-	while (++n <= 32) {
-		if (len < n * 8) return n * 8;
-	}
-	return 256;
+    int n = 0;
+    while (++n <= 32) {
+        if (len < n * 8) return n * 8;
+    }
+    return 256;
 }
 ```
 
@@ -327,7 +347,7 @@ for (int pmy = 0; pmy < cDataSize; ++pmy) {
 
 
 
-### 4. Write Data
+### 5. Write Data
 
 In the beginning, we need to write the Huffman Code Mapping Table to **CompressedData**.
 
@@ -522,76 +542,51 @@ while (pos_data < cDataSize) {
 
 Each time we find a value in the tree, we write the value to **uncompresedData** simultaneously.
 
+### 4. Recover Differential Coding
+
+In this section, we will undo the **Differential Coding** to recover the pixels.
+
+```cpp
+// Recover Differential Coding
+for (unsigned int i = 5; i < pos_uncompressed_data; i = i + 3) {
+    uncompressedData[i] = (unsigned char)(
+        (unsigned int)uncompressedData[i] + (unsigned int)uncompressedData[i - 3]
+    );
+    uncompressedData[i - 1] = (unsigned char)(
+        (unsigned int)uncompressedData[i - 1] + (unsigned int)uncompressedData[i - 4]
+    );
+    uncompressedData[i - 2] = (unsigned char)(
+        (unsigned int)uncompressedData[i - 2] + (unsigned int)uncompressedData[i - 5]
+    );
+}
+```
+
+
+
 Finally, we finished decompressing the image.
 
 
 
 # Experiment
 
-## Procedure
+## Result
 
-### Beach
-
-![](Sample Images/Beach.jpg)
-
-| Type             | Compression Ratio |
-| ---------------- | ----------------- |
-| Before Quantized | 1.04              |
-| After Quantized  | 1.71              |
+![Beach](Sample Images/Beach.jpg)
+![Red Panda](Sample Images/Red Panda.jpg)
+![sunset](Sample Images/sunset.jpg)
+![Tuxinu](Sample Images/Tuxinu.png)
 
 
+| Type      | Beach | Red Panda | Sunset | Tuxinu |
+| --------- | ----- | --------- | ------ | ------ |
+| Original  | 1.72  | 1.59      | 2.02   | 3.33   |
+| Quantized | 3.71  | 3.48      | 4.66   | 5.24   |
 
-### Red Panda
-
-![](Sample Images/Red Panda.jpg)
-
-| Type             | Compression Ratio |
-| ---------------- | ----------------- |
-| Before Quantized | 1.02              |
-| After Quantized  | 1.65              |
-
-
-
-### sunset
-
-![](Sample Images/sunset.jpg)
-
-| Type             | Compression Ratio |
-| ---------------- | ----------------- |
-| Before Quantized | 1.03              |
-| After Quantized  | 1.67              |
-
-
-
-### Tuxinu
-
-![](Sample Images/Tuxinu.png)
-
-| Type             | Compression Ratio |
-| ---------------- | ----------------- |
-| Before Quantized | 1.52              |
-| After Quantized  | 2.25              |
-
-### Hydrogen (Custom Image)
-
-![](Sample Images/Hydrogen.png)
-
-| Type             | Compression Ratio |
-| ---------------- | ----------------- |
-| Before Quantized | 5.65              |
-| After Quantized  | 5.65              |
 
 ## Explaination
 
-According to the result above, we can see that there is an improvement of the **Compression Ratio** in images *Beach*, *Red Panda*, *sunset* and *Tuxinu*.
+According to the result above, we can find that there is obvious improvement of the **Compresssion Ratio** in each picture from **8-8-8 original** picture to **5-5-5 quantized** picture. 
 
-The reason why the **Compression Ratio** improves is that we did a **5-5-5 quantization** on the image. This is compressing the color space because it will map similar color to same color. This will reduce the number of  distinct numerical value of three-primary colors of RGB and increase the appearance frequency of certain kinds of three-primary colors of RGB.
+The main reason for the improvement is that, when we do differential coding, we only focus on the difference between two values. As the step of difference value of three-primary colors of RGB between two adjacent pixels in the **5-5-5 quantized** picture is much more bigger than **8-8-8 original** picture. for example,  the *Red* color value of three adjacent pixels is ` 01001100`, `01001000` and `01001010`. In **original** picture the differential values are ` 4` and `-2`, but in **quantized** picture the differential values are `0` and `0`. Normally, all the difference in the last 3 bits of **8-8-8 original** picture will be quantized. So, the number of different values in **5-5-5 quantized** picture is much more less than that in **8-8-8 original** picture. 
 
-Since we use **Huffman Coding** algorithm to compress image, the encoded length is depending on the appearance frequency of the three-primary colors of RGB of all pixels, as well as the number of distinct numerical value of three-primary colors of RGB.
-
-After **5-5-5 quantization**, the number of distinct numerical value of three-primary colors of RGB reduced, while the appearance frequency of certain kinds of three-primary colors of RGB increased. 
-
-As we can see in the *Huffman tree* structure, the average length of code mainly depend on the number of different value. Before **quantization**, for most pictures, like given images *Beach*, *Red Panda* and *sunset*, the number of distinct numerical value of three-primary colors of RGB is 2^8^=`256`. But After **5-5-5 quantization**, the number of distinct numerical value of three-primary colors of RGB is 2^5^=`32`. Using *Huffman Code*, the worst case is that,  the length of all code is `5`, which would still increase the compression ratio up to about `1.6` . This will obviously improve the **Compression Ratio**.
-
-Thus, we can explain that the **Compression Ratio** of the last image (*Hydrogen.png*) won't improve because the image has too few colors since **5-5-5 quantization** neither reduced colors nor increase the appearance frequency of colors.
-
+When we using *Huffman coding* to compress the differential coding value, the average length of code mainly depends on the number of different values. As we have discussed above, the number of different values in **5-5-5 quantized** picture is much more less than that in **8-8-8 original** picture. So, the average length of *Huffman code* in **quantized** picture is much more shorter than that in **original** picture. That is the reason for the improvement of **Compression Ratio**.
